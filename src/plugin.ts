@@ -887,8 +887,11 @@ const plugin: Plugin = {
       path: '/rss',
       type: 'GET',
       handler: async (req: any, res: any) => {
-        // Redirect to the RSS server
-        res.redirect('http://localhost:' + (process.env.RSS_SERVER_PORT || '3001') + '/rss');
+        // Redirect to the RSS server using the request host
+        const port = process.env.RSS_SERVER_PORT || '3001';
+        const protocol = req.protocol || 'http';
+        const host = req.hostname || 'localhost';
+        res.redirect(`${protocol}://${host}:${port}/rss`);
       },
     },
   ],

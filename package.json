@@ -13,7 +13,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "github:elizaos/plugin"
+    "url": "https://github.com/eliza-os/twitter-rss-agent"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -52,9 +52,10 @@
     "start": "elizaos start",
     "dev": "elizaos dev",
     "build": "tsup",
+    "build:e2e": "tsup e2e/*.ts --format esm --outDir dist/e2e",
     "lint": "prettier --write ./src",
     "test:component": "vitest run",
-    "test:e2e": "elizaos test",
+    "test:e2e": "npm run build:e2e && elizaos test e2e --skip-build",
     "test": "npm run test:component && npm run test:e2e",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -72,5 +73,6 @@
       "name": "plugin",
       "description": "Project starter for elizaOS"
     }
-  }
+  },
+  "license": "MIT"
 }
