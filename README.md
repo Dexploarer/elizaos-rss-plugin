@@ -1,5 +1,6 @@
 # Twitter RSS Agent - ElizaOS Plugin
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Dexploarer/elizaos-rss-plugin?utm_source=oss&utm_medium=github&utm_campaign=Dexploarer%2Felizaos-rss-plugin&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 An ElizaOS-powered agent that monitors Twitter lists and generates RSS feeds using the `agent-twitter-client` library. No Twitter API keys required!
 
 ## 🎯 Features
