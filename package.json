@@ -55,7 +55,7 @@
     "build:e2e": "tsup e2e/*.ts --format esm --outDir dist/e2e",
     "lint": "prettier --write ./src",
     "test:component": "vitest run",
-    "test:e2e": "npm run build:e2e && elizaos test e2e --skip-build",
+    "test:e2e": "npm run build:e2e && OPENAI_API_KEY=dummy elizaos test e2e --skip-build",
     "test": "npm run test:component && npm run test:e2e",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
