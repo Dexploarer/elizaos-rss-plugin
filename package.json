@@ -13,7 +13,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "github:elizaos/plugin"
+    "url": "https://github.com/eliza-os/twitter-rss-agent"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -72,5 +72,6 @@
       "name": "plugin",
       "description": "Project starter for elizaOS"
     }
-  }
+  },
+  "license": "MIT"
 }
