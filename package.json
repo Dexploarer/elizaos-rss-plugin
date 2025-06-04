@@ -1,5 +1,5 @@
 {
-  "name": "twitter-rss-agent",
+  "name": "@elizaos/plugin-twitter-rss",
   "description": "ElizaOS Twitter List RSS Agent",
   "version": "0.1.0",
   "type": "module",

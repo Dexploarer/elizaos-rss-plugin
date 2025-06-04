@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RSSServerService } from '../src/plugin';
+import { RSSServerService } from '../src/services/rssServerService';
 
 describe('Service Stop Handling', () => {
   it('should handle missing service gracefully', async () => {
