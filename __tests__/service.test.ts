@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TwitterRSSService } from '../src/plugin';
+import { TwitterRSSService } from '../src/services/twitterRSSService';
 import { createMockRuntime } from './test-utils';
 
 describe('TwitterRSSService failure cases', () => {

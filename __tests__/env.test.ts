@@ -14,7 +14,7 @@ describe('Environment Setup', () => {
   it('should have project package.json with correct name', () => {
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    expect(pkg.name).toBe('twitter-rss-agent');
+    expect(pkg.name).toBe('@elizaos/plugin-twitter-rss');
     expect(pkg.license).toBe('MIT');
   });
 });
