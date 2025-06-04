@@ -1,4 +1,5 @@
 # Twitter RSS Agent - ElizaOS Plugin
+
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Dexploarer/elizaos-rss-plugin?utm_source=oss&utm_medium=github&utm_campaign=Dexploarer%2Felizaos-rss-plugin&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 An ElizaOS-powered agent that monitors Twitter lists and generates RSS feeds using the `agent-twitter-client` library. No Twitter API keys required!
@@ -17,11 +18,13 @@ An ElizaOS-powered agent that monitors Twitter lists and generates RSS feeds usi
 ## 🚀 Quick Start
 
 ### 1. Install Dependencies
+
 ```bash
 npm install
 ```
 
 ### 2. Configure Environment
+
 Edit `.env` with your credentials:
 
 ```env
@@ -38,17 +41,20 @@ TWITTER_LISTS=1234567890,9876543210,1111111111
 ```
 
 ### 3. Get Twitter List IDs
+
 1. Visit any Twitter list: `https://twitter.com/i/lists/[LIST_ID]`
 2. Copy the number from the URL (that's the List ID)
 3. Add multiple IDs to `TWITTER_LISTS` separated by commas
 
 ### 4. Start the Agent
+
 ```bash
 npm run build
 npm start
 ```
 
 ### 5. Access Your RSS Feed
+
 - **RSS Feed**: http://localhost:3001/rss
 - **Status Dashboard**: http://localhost:3001/status
 - **Manual Update**: POST http://localhost:3001/update
@@ -56,45 +62,51 @@ npm start
 ## 📋 Required Accounts & API Keys
 
 ### Twitter Account (REQUIRED)
+
 - **What**: Your regular Twitter account credentials
 - **Where**: Use existing account or create at https://twitter.com
 - **Why**: No Twitter API keys needed - uses web scraping
 
 ### AI Model Provider (REQUIRED - Choose ONE)
+
 - **OpenAI**: Get API key from https://platform.openai.com/api-keys
-- **Anthropic**: Get API key from https://console.anthropic.com/  
+- **Anthropic**: Get API key from https://console.anthropic.com/
 - **Groq**: Get API key from https://console.groq.com/ (has free tier)
 
 ## 🎛️ Configuration Options
 
 ### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `TWITTER_USERNAME` | ✅ | - | Your Twitter username |
-| `TWITTER_PASSWORD` | ✅ | - | Your Twitter password |
-| `TWITTER_EMAIL` | ✅ | - | Your Twitter email |
-| `TWITTER_LISTS` | ✅ | - | Comma-separated list IDs |
-| `OPENAI_API_KEY` | ✅* | - | OpenAI API key |
-| `RSS_UPDATE_INTERVAL` | ❌ | 30 | Update interval (minutes) |
-| `MAX_TWEETS_PER_LIST` | ❌ | 50 | Max tweets per list |
-| `RSS_API_TOKEN` | ❌ | - | Bearer token required for HTTP API |
-| `RSS_SERVER_PORT` | ❌ | 3001 | HTTP server port |
-| `FILTER_RETWEETS` | ❌ | false | Filter out retweets |
-| `FILTER_REPLIES` | ❌ | false | Filter out replies |
+| Variable              | Required | Default | Description                        |
+| --------------------- | -------- | ------- | ---------------------------------- |
+| `TWITTER_USERNAME`    | ✅       | -       | Your Twitter username              |
+| `TWITTER_PASSWORD`    | ✅       | -       | Your Twitter password              |
+| `TWITTER_EMAIL`       | ✅       | -       | Your Twitter email                 |
+| `TWITTER_LISTS`       | ✅       | -       | Comma-separated list IDs           |
+| `OPENAI_API_KEY`      | ✅\*     | -       | OpenAI API key                     |
+| `RSS_UPDATE_INTERVAL` | ❌       | 30      | Update interval (minutes)          |
+| `MAX_TWEETS_PER_LIST` | ❌       | 50      | Max tweets per list                |
+| `RSS_API_TOKEN`       | ❌       | -       | Bearer token required for HTTP API |
+| `RSS_SERVER_PORT`     | ❌       | 3001    | HTTP server port                   |
+| `FILTER_RETWEETS`     | ❌       | false   | Filter out retweets                |
+| `FILTER_REPLIES`      | ❌       | false   | Filter out replies                 |
+| `FETCH_TWEET_THREADS` | ❌       | false   | Include conversation threads       |
 
-*Required: One AI provider API key
+\*Required: One AI provider API key
 
 ## 🤖 ElizaOS Integration
 
 ### Available Actions
+
 - `UPDATE_RSS_FEED`: Manually trigger RSS updates
 - `GET_RSS_STATUS`: Check feed status and statistics
 
 ### Providers
+
 - `TWITTER_LIST_PROVIDER`: Supplies context about monitored lists
 
 ### Services
+
 - `TwitterRSSService`: Core RSS generation and Twitter monitoring
 - `RSSServerService`: HTTP server for feed access
 
@@ -110,6 +122,7 @@ All endpoints (except `/health`) require an `Authorization: Bearer` token if `RS
 ## 🔧 Usage Examples
 
 ### Chat Commands
+
 ```
 "Update my RSS feed"           → Triggers RSS update
 "What's the RSS feed status?"  → Shows current status
@@ -118,6 +131,7 @@ All endpoints (except `/health`) require an `Authorization: Bearer` token if `RS
 ```
 
 ### HTTP API
+
 ```bash
 # Get RSS feed
 curl http://localhost:3001/rss
@@ -141,6 +155,7 @@ curl -X POST http://localhost:3001/update
 ## 📊 Monitoring & Status
 
 The agent provides detailed monitoring:
+
 - Last update timestamp
 - Total tweets processed
 - RSS file size and location
@@ -150,16 +165,19 @@ The agent provides detailed monitoring:
 ## 🔍 Troubleshooting
 
 **Authentication Issues**
+
 - Verify Twitter credentials in `.env`
 - Check username (no @ symbol needed)
 - Ensure email matches your Twitter account
 
 **No Tweets Found**
+
 - Verify List IDs are correct numbers
 - Check if lists are public
 - Ensure lists contain active accounts
 
 **RSS Feed Empty**
+
 - Run manual update: `POST /update`
 - Check `/status` endpoint for errors
 - Verify `TWITTER_LISTS` environment variable
@@ -167,14 +185,17 @@ The agent provides detailed monitoring:
 ## 🎯 Advanced Configuration
 
 ### Custom Filtering
+
 ```env
 FILTER_RETWEETS=true      # Remove retweets
 FILTER_REPLIES=true       # Remove replies
 MIN_TWEET_LENGTH=20       # Minimum tweet length
 MAX_RSS_ENTRIES=1000      # Maximum feed entries
+FETCH_TWEET_THREADS=true  # Include conversation threads
 ```
 
 ### RSS Customization
+
 ```env
 RSS_FEED_TITLE=My Custom Feed
 RSS_FEED_DESCRIPTION=Curated tweets from my lists
@@ -210,6 +231,7 @@ MIT License - Feel free to modify and distribute
 ## 🎉 Ready to Use!
 
 Your Twitter RSS Agent is now configured and ready to:
+
 - Monitor your chosen Twitter lists automatically
 - Generate clean RSS feeds for feed readers
 - Provide HTTP endpoints for easy access

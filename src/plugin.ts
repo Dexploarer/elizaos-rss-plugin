@@ -45,6 +45,7 @@ interface RawTweetData {
   photos?: Array<{ url: string }>;
   likes?: number;
   retweets?: number;
+  thread?: RawTweetData[];
   replies?: number;
   [key: string]: any; // Allow additional properties
 }
@@ -73,6 +74,7 @@ interface TweetData {
     retweets: number;
     replies: number;
   };
+  thread?: TweetData[];
 }
 
 interface RSSItem {
@@ -105,10 +107,7 @@ const configSchema = z.object({
     .string()
     .min(1, 'Twitter password is required')
     .optional(),
-  TWITTER_EMAIL: z
-    .string()
-    .email('Valid Twitter email is required')
-    .optional(),
+  TWITTER_EMAIL: z.string().email('Valid Twitter email is required').optional(),
   TWITTER_LISTS: z
     .string()
     .min(1, 'At least one Twitter list ID is required')
@@ -121,21 +120,13 @@ const configSchema = z.object({
     .string()
     .transform((val) => parseInt(val || '50'))
     .optional(),
-  RSS_API_TOKEN: z
-    .string()
-    .optional(),
-  RSS_FEED_TITLE: z
-    .string()
-    .optional()
-    .default('Twitter Lists RSS Feed'),
+  RSS_API_TOKEN: z.string().optional(),
+  RSS_FEED_TITLE: z.string().optional().default('Twitter Lists RSS Feed'),
   RSS_FEED_DESCRIPTION: z
     .string()
     .optional()
     .default('Aggregated tweets from monitored Twitter lists'),
-  RSS_OUTPUT_DIR: z
-    .string()
-    .optional()
-    .default('./rss-feeds'),
+  RSS_OUTPUT_DIR: z.string().optional().default('./rss-feeds'),
   RSS_SERVER_PORT: z
     .string()
     .transform((val) => parseInt(val || '3001'))
@@ -156,6 +147,10 @@ const configSchema = z.object({
     .string()
     .transform((val) => parseInt(val || '500'))
     .optional(),
+  FETCH_TWEET_THREADS: z
+    .string()
+    .transform((val) => val === 'true')
+    .optional(),
 });
 
 // ====================================
@@ -169,7 +164,7 @@ export class TwitterRSSService extends Service {
   private twitterLists: TwitterListConfig[] = [];
   private processedTweetIds: Set<string> = new Set();
   private schedulerInterval: NodeJS.Timeout | null = null;
-  
+
   capabilityDescription =
     'Twitter RSS service that monitors Twitter lists and generates RSS feeds.';
 
@@ -179,15 +174,18 @@ export class TwitterRSSService extends Service {
     this.initializeLists();
   }
   private getConfig(key: string, defaultValue?: string): string | undefined {
-    const val = (this.runtime as any).getSetting?.(key) ?? (plugin.config as any)[key] ?? process.env[key];
+    const val =
+      (this.runtime as any).getSetting?.(key) ??
+      (plugin.config as any)[key] ??
+      process.env[key];
     return val ?? defaultValue;
   }
   private initializeLists(): void {
     const lists = this.getConfig('TWITTER_LISTS');
     const listIds = lists ? lists.split(',') : [];
-    this.twitterLists = listIds.map(id => ({
+    this.twitterLists = listIds.map((id) => ({
       listId: id.trim(),
-      name: `List ${id.trim()}`
+      name: `List ${id.trim()}`,
     }));
   }
 
@@ -212,12 +210,14 @@ export class TwitterRSSService extends Service {
       const password = this.getConfig('TWITTER_PASSWORD');
       const email = this.getConfig('TWITTER_EMAIL');
       if (!username || !password || !email) {
-        logger.warn('Twitter credentials not configured, Twitter RSS service will be disabled');
+        logger.warn(
+          'Twitter credentials not configured, Twitter RSS service will be disabled'
+        );
         return;
       }
 
       logger.info('Attempting Twitter authentication...');
-      
+
       // Add proxy support if configured
       const proxy = this.getConfig('PROXY_URL');
       if (proxy) {
@@ -225,17 +225,18 @@ export class TwitterRSSService extends Service {
       }
 
       await this.scraper.login(username, password, email);
-      
+
       this.isLoggedIn = await this.scraper.isLoggedIn();
-      
+
       if (this.isLoggedIn) {
         logger.info('✅ Twitter authentication successful');
         await this.loadProcessedTweetIds();
         this.startScheduler();
       } else {
-        logger.warn('❌ Twitter authentication failed - service will run in limited mode');
+        logger.warn(
+          '❌ Twitter authentication failed - service will run in limited mode'
+        );
       }
-      
     } catch (error) {
       logger.error('❌ Twitter authentication failed:', error.message);
       logger.warn('Twitter RSS service will run in limited mode. Consider:');
@@ -255,7 +256,10 @@ export class TwitterRSSService extends Service {
   }
   private async loadProcessedTweetIds(): Promise<void> {
     try {
-      const outputDir = this.getConfig('RSS_OUTPUT_DIR', './rss-feeds') as string;
+      const outputDir = this.getConfig(
+        'RSS_OUTPUT_DIR',
+        './rss-feeds'
+      ) as string;
       const cacheFile = path.join(outputDir, 'processed_tweets.json');
       const data = await fs.readFile(cacheFile, 'utf-8');
       const processedIds = JSON.parse(data);
@@ -267,9 +271,12 @@ export class TwitterRSSService extends Service {
 
   private async saveProcessedTweetIds(): Promise<void> {
     try {
-      const outputDir = this.getConfig('RSS_OUTPUT_DIR', './rss-feeds') as string;
+      const outputDir = this.getConfig(
+        'RSS_OUTPUT_DIR',
+        './rss-feeds'
+      ) as string;
       await fs.mkdir(outputDir, { recursive: true });
-      
+
       const cacheFile = path.join(outputDir, 'processed_tweets.json');
       const processedIds = Array.from(this.processedTweetIds);
       await fs.writeFile(cacheFile, JSON.stringify(processedIds, null, 2));
@@ -280,20 +287,28 @@ export class TwitterRSSService extends Service {
 
   private startScheduler(): void {
     if (!this.isLoggedIn) {
-      logger.warn('Skipping RSS scheduler - Twitter authentication not available');
+      logger.warn(
+        'Skipping RSS scheduler - Twitter authentication not available'
+      );
       return;
     }
 
-    const intervalMinutes = parseInt(this.getConfig('RSS_UPDATE_INTERVAL', '30') as string);
+    const intervalMinutes = parseInt(
+      this.getConfig('RSS_UPDATE_INTERVAL', '30') as string
+    );
     const intervalMs = intervalMinutes * 60 * 1000;
 
-    logger.info(`Starting RSS scheduler with ${intervalMinutes}-minute intervals`);
+    logger.info(
+      `Starting RSS scheduler with ${intervalMinutes}-minute intervals`
+    );
 
     this.schedulerInterval = setInterval(async () => {
       try {
         logger.info('Scheduled RSS update starting...');
         const result = await this.processAllLists();
-        logger.info(`Scheduled update completed: ${result.totalTweets} tweets processed`);
+        logger.info(
+          `Scheduled update completed: ${result.totalTweets} tweets processed`
+        );
       } catch (error) {
         logger.error('Scheduled RSS update failed:', error);
       }
@@ -304,21 +319,45 @@ export class TwitterRSSService extends Service {
       try {
         logger.info('Running initial RSS update...');
         const result = await this.processAllLists();
-        logger.info(`Initial update completed: ${result.totalTweets} tweets processed`);
+        logger.info(
+          `Initial update completed: ${result.totalTweets} tweets processed`
+        );
       } catch (error) {
         logger.error('Initial RSS update failed:', error);
       }
     }, 5000); // Wait 5 seconds before first update
   }
-  async fetchListTweets(listId: string, maxTweets: number = 50): Promise<TweetData[]> {
+  async fetchListTweets(
+    listId: string,
+    maxTweets: number = 50
+  ): Promise<TweetData[]> {
     try {
       const tweets = await this.scraper.fetchListTweets(listId, maxTweets);
-      
-      return (tweets as RawTweetData[])
-        .filter((tweet: RawTweetData) => tweet && tweet.id && !this.processedTweetIds.has(tweet.id))
+
+      const filtered = (tweets as RawTweetData[]).filter(
+        (tweet: RawTweetData) =>
+          tweet && tweet.id && !this.processedTweetIds.has(tweet.id)
+      );
+
+      if (this.getConfig('FETCH_TWEET_THREADS') === 'true') {
+        for (const tweet of filtered) {
+          try {
+            const full = await this.scraper.getTweet(tweet.id as string);
+            if (full && Array.isArray(full.thread)) {
+              tweet.thread = full.thread;
+            }
+          } catch (err) {
+            logger.warn(
+              `Failed to fetch thread for tweet ${tweet.id}:`,
+              (err as Error).message
+            );
+          }
+        }
+      }
+
+      return filtered
         .map(this.transformTweet.bind(this))
         .filter(this.applyFilters.bind(this));
-        
     } catch (error) {
       logger.error(`Failed to fetch tweets from list ${listId}:`, error);
       return [];
@@ -337,7 +376,7 @@ export class TwitterRSSService extends Service {
       author: {
         username: tweet.username || 'unknown',
         name: tweet.name || 'Unknown User',
-        verified: tweet.isVerified || false
+        verified: tweet.isVerified || false,
       },
       createdAt: new Date(tweet.timestamp || Date.now()),
       url: `https://twitter.com/${tweet.username || 'unknown'}/status/${tweet.id}`,
@@ -346,15 +385,19 @@ export class TwitterRSSService extends Service {
       replyToTweetId: tweet.inReplyToStatusId,
       retweetedTweet: tweet.retweetedStatus,
       quotedTweet: tweet.quotedStatus,
-      media: tweet.photos?.map((photo: any) => ({
-        type: 'image',
-        url: photo.url
-      })) || [],
+      media:
+        tweet.photos?.map((photo: any) => ({
+          type: 'image',
+          url: photo.url,
+        })) || [],
       metrics: {
         likes: tweet.likes || 0,
         retweets: tweet.retweets || 0,
-        replies: tweet.replies || 0
-      }
+        replies: tweet.replies || 0,
+      },
+      thread: Array.isArray(tweet.thread)
+        ? tweet.thread.map((t: RawTweetData) => this.transformTweet(t))
+        : undefined,
     };
   }
 
@@ -367,7 +410,9 @@ export class TwitterRSSService extends Service {
       return false;
     }
 
-    const minLength = parseInt(this.getConfig('MIN_TWEET_LENGTH', '0') as string);
+    const minLength = parseInt(
+      this.getConfig('MIN_TWEET_LENGTH', '0') as string
+    );
     if (tweet.text.length < minLength) {
       return false;
     }
@@ -376,11 +421,17 @@ export class TwitterRSSService extends Service {
   }
   async generateRSSFeed(tweets: TweetData[]): Promise<string> {
     const feed: RSSFeed = {
-      title: this.getConfig('RSS_FEED_TITLE', 'Twitter Lists RSS Feed') as string,
-      description: this.getConfig('RSS_FEED_DESCRIPTION', 'Aggregated tweets from monitored Twitter lists') as string,
+      title: this.getConfig(
+        'RSS_FEED_TITLE',
+        'Twitter Lists RSS Feed'
+      ) as string,
+      description: this.getConfig(
+        'RSS_FEED_DESCRIPTION',
+        'Aggregated tweets from monitored Twitter lists'
+      ) as string,
       link: 'https://twitter.com',
       lastBuildDate: new Date().toUTCString(),
-      items: tweets.map(this.transformToRSSItem.bind(this))
+      items: tweets.map(this.transformToRSSItem.bind(this)),
     };
 
     return this.buildRSSXML(feed);
@@ -388,13 +439,20 @@ export class TwitterRSSService extends Service {
 
   private transformToRSSItem(tweet: TweetData): RSSItem {
     let description = tweet.text;
-    
+
     if (tweet.media && tweet.media.length > 0) {
       description += `\n\nMedia: ${tweet.media.length} attachment(s)`;
     }
 
     if (tweet.metrics) {
       description += `\n\n❤️ ${tweet.metrics.likes} | 🔄 ${tweet.metrics.retweets} | 💬 ${tweet.metrics.replies}`;
+    }
+
+    if (tweet.thread && tweet.thread.length > 0) {
+      const replies = tweet.thread
+        .map((t) => `@${t.author.username}: ${t.text}`)
+        .join('\n');
+      description += `\n\nThread:\n${replies}`;
     }
 
     return {
@@ -404,7 +462,11 @@ export class TwitterRSSService extends Service {
       pubDate: tweet.createdAt.toUTCString(),
       guid: tweet.id,
       author: `${tweet.author.name} (@${tweet.author.username})`,
-      category: tweet.isRetweet ? ['retweet'] : tweet.isReply ? ['reply'] : ['tweet']
+      category: tweet.isRetweet
+        ? ['retweet']
+        : tweet.isReply
+          ? ['reply']
+          : ['tweet'],
     };
   }
 
@@ -422,62 +484,73 @@ export class TwitterRSSService extends Service {
           'atom:link': {
             '@_href': feed.link,
             '@_rel': 'self',
-            '@_type': 'application/rss+xml'
+            '@_type': 'application/rss+xml',
           },
-          item: feed.items.map(item => ({
+          item: feed.items.map((item) => ({
             title: item.title,
             description: { '#cdata': item.description },
             link: item.link,
             pubDate: item.pubDate,
             guid: {
               '@_isPermaLink': 'false',
-              '#text': item.guid
+              '#text': item.guid,
             },
             author: item.author,
-            category: item.category
-          }))
-        }
-      }
+            category: item.category,
+          })),
+        },
+      },
     };
 
     const builder = new XMLBuilder({
       ignoreAttributes: false,
       format: true,
-      cdataPropName: '#cdata'
+      cdataPropName: '#cdata',
     });
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + builder.build(rssData);
   }
-  async saveRSSFeed(rssXML: string, filename: string = 'twitter_lists.xml'): Promise<string> {
+  async saveRSSFeed(
+    rssXML: string,
+    filename: string = 'twitter_lists.xml'
+  ): Promise<string> {
     const outputDir = this.getConfig('RSS_OUTPUT_DIR', './rss-feeds') as string;
     await fs.mkdir(outputDir, { recursive: true });
-    
+
     const filePath = path.join(outputDir, filename);
     await fs.writeFile(filePath, rssXML, 'utf-8');
-    
+
     return filePath;
   }
 
   async processAllLists(): Promise<{ totalTweets: number; rssPath: string }> {
     if (!this.isLoggedIn) {
-      logger.warn('Twitter not authenticated - cannot fetch tweets. Check authentication status.');
-      throw new Error('Twitter authentication required. Please check credentials and try again.');
+      logger.warn(
+        'Twitter not authenticated - cannot fetch tweets. Check authentication status.'
+      );
+      throw new Error(
+        'Twitter authentication required. Please check credentials and try again.'
+      );
     }
 
     const allTweets: TweetData[] = [];
-    const maxTweetsPerList = parseInt(this.getConfig('MAX_TWEETS_PER_LIST', '50') as string);
+    const maxTweetsPerList = parseInt(
+      this.getConfig('MAX_TWEETS_PER_LIST', '50') as string
+    );
 
     for (const list of this.twitterLists) {
       logger.info(`Processing list: ${list.listId}`);
-      
+
       try {
-        const tweets = await this.fetchListTweets(list.listId, maxTweetsPerList);
+        const tweets = await this.fetchListTweets(
+          list.listId,
+          maxTweetsPerList
+        );
         allTweets.push(...tweets);
-        
-        tweets.forEach(tweet => this.processedTweetIds.add(tweet.id));
-        
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
+        tweets.forEach((tweet) => this.processedTweetIds.add(tweet.id));
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (error) {
         logger.error(`Error processing list ${list.listId}:`, error);
       }
@@ -485,7 +558,9 @@ export class TwitterRSSService extends Service {
 
     allTweets.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-    const maxEntries = parseInt(this.getConfig('MAX_RSS_ENTRIES', '500') as string);
+    const maxEntries = parseInt(
+      this.getConfig('MAX_RSS_ENTRIES', '500') as string
+    );
     const limitedTweets = allTweets.slice(0, maxEntries);
 
     const rssXML = await this.generateRSSFeed(limitedTweets);
@@ -495,7 +570,7 @@ export class TwitterRSSService extends Service {
 
     return {
       totalTweets: limitedTweets.length,
-      rssPath
+      rssPath,
     };
   }
 }
@@ -506,9 +581,14 @@ export class TwitterRSSService extends Service {
 const updateRSSAction: Action = {
   name: 'UPDATE_RSS_FEED',
   similes: ['REFRESH_RSS', 'UPDATE_FEED', 'FETCH_LISTS'],
-  description: 'Update RSS feed with latest tweets from monitored Twitter lists',
+  description:
+    'Update RSS feed with latest tweets from monitored Twitter lists',
 
-  validate: async (runtime: IAgentRuntime, _message: Memory, _state: State): Promise<boolean> => {
+  validate: async (
+    runtime: IAgentRuntime,
+    _message: Memory,
+    _state: State
+  ): Promise<boolean> => {
     const service = runtime.getService(TwitterRSSService.serviceType);
     return service instanceof TwitterRSSService;
   },
@@ -521,14 +601,16 @@ const updateRSSAction: Action = {
     callback: HandlerCallback
   ) => {
     try {
-      const service = runtime.getService(TwitterRSSService.serviceType) as TwitterRSSService;
-      
+      const service = runtime.getService(
+        TwitterRSSService.serviceType
+      ) as TwitterRSSService;
+
       if (!service) {
         throw new Error('Twitter RSS service not available');
       }
 
       const result = await service.processAllLists();
-      
+
       const responseContent: Content = {
         text: `RSS feed updated successfully!\n📊 Processed ${result.totalTweets} new tweets\n📁 RSS file: ${result.rssPath}\n🕒 Last updated: ${new Date().toLocaleString()}`,
         source: message.content.source,
@@ -537,10 +619,9 @@ const updateRSSAction: Action = {
 
       await callback(responseContent);
       return responseContent;
-
     } catch (error) {
       logger.error('RSS update failed:', error);
-      
+
       const errorContent: Content = {
         text: `❌ RSS update failed: ${error.message}`,
         source: message.content.source,
@@ -562,7 +643,7 @@ const updateRSSAction: Action = {
       {
         name: '{{name2}}',
         content: {
-          text: 'I\'ll update the RSS feed with the latest tweets from your monitored lists',
+          text: "I'll update the RSS feed with the latest tweets from your monitored lists",
           actions: ['UPDATE_RSS_FEED'],
         },
       },
@@ -589,7 +670,11 @@ const getRSSStatusAction: Action = {
   similes: ['RSS_STATUS', 'FEED_STATUS', 'CHECK_RSS'],
   description: 'Get current status of RSS feed and monitoring lists',
 
-  validate: async (_runtime: IAgentRuntime, _message: Memory, _state: State): Promise<boolean> => {
+  validate: async (
+    _runtime: IAgentRuntime,
+    _message: Memory,
+    _state: State
+  ): Promise<boolean> => {
     return true;
   },
 
@@ -601,11 +686,14 @@ const getRSSStatusAction: Action = {
     callback: HandlerCallback
   ) => {
     try {
-      const outputDir = this.getConfig('RSS_OUTPUT_DIR', './rss-feeds') as string;
+      const outputDir = this.getConfig(
+        'RSS_OUTPUT_DIR',
+        './rss-feeds'
+      ) as string;
       const rssFile = path.join(outputDir, 'twitter_lists.xml');
-      
+
       let status = 'RSS Feed Status:\n';
-      
+
       try {
         const stats = await fs.stat(rssFile);
         status += `📄 RSS file exists: ${rssFile}\n`;
@@ -615,7 +703,9 @@ const getRSSStatusAction: Action = {
         status += `❌ RSS file not found\n`;
       }
 
-      const lists = (this.getConfig('TWITTER_LISTS') || '').split(',').filter(Boolean);
+      const lists = (this.getConfig('TWITTER_LISTS') || '')
+        .split(',')
+        .filter(Boolean);
       status += `📋 Monitoring ${lists.length} lists: ${lists.join(', ')}\n`;
       status += `⏱️ Update interval: ${this.getConfig('RSS_UPDATE_INTERVAL', '30')} minutes\n`;
       status += `🎯 Max tweets per update: ${this.getConfig('MAX_TWEETS_PER_LIST', '50')}\n`;
@@ -628,10 +718,9 @@ const getRSSStatusAction: Action = {
 
       await callback(responseContent);
       return responseContent;
-
     } catch (error) {
       logger.error('Status check failed:', error);
-      
+
       const errorContent: Content = {
         text: `❌ Status check failed: ${error.message}`,
         source: message.content.source,
@@ -647,7 +736,7 @@ const getRSSStatusAction: Action = {
       {
         name: '{{name1}}',
         content: {
-          text: 'What\'s the status of the RSS feed?',
+          text: "What's the status of the RSS feed?",
         },
       },
       {
@@ -666,27 +755,37 @@ const getRSSStatusAction: Action = {
 
 const twitterListProvider: Provider = {
   name: 'TWITTER_LIST_PROVIDER',
-  description: 'Provides context about monitored Twitter lists and RSS feed status',
+  description:
+    'Provides context about monitored Twitter lists and RSS feed status',
 
   get: async (
     runtime: IAgentRuntime,
     _message: Memory,
     _state: State
   ): Promise<ProviderResult> => {
-      const lists = (runtime.getSetting?.('TWITTER_LISTS') || plugin.config.TWITTER_LISTS || '').split(',').filter(Boolean);
-      const updateInterval = runtime.getSetting?.('RSS_UPDATE_INTERVAL') || plugin.config.RSS_UPDATE_INTERVAL || '30';
-    
+    const lists = (
+      runtime.getSetting?.('TWITTER_LISTS') ||
+      plugin.config.TWITTER_LISTS ||
+      ''
+    )
+      .split(',')
+      .filter(Boolean);
+    const updateInterval =
+      runtime.getSetting?.('RSS_UPDATE_INTERVAL') ||
+      plugin.config.RSS_UPDATE_INTERVAL ||
+      '30';
+
     return {
       text: `Monitoring ${lists.length} Twitter lists with ${updateInterval}-minute update intervals`,
       values: {
         monitoredLists: lists,
         updateInterval,
-        totalLists: lists.length
+        totalLists: lists.length,
       },
       data: {
-        lists: lists.map(id => id.trim()),
+        lists: lists.map((id) => id.trim()),
         interval: updateInterval,
-        count: lists.length
+        count: lists.length,
       },
     };
   },
@@ -702,14 +801,20 @@ export class RSSServerService extends Service {
   private server: any;
   private port: number;
   private apiToken?: string;
-  
-  capabilityDescription = 'HTTP server for serving RSS feeds and API endpoints.';
+
+  capabilityDescription =
+    'HTTP server for serving RSS feeds and API endpoints.';
 
   constructor(protected runtime: IAgentRuntime) {
     super(runtime);
     this.app = express();
-    this.port = parseInt((this.runtime.getSetting?.('RSS_SERVER_PORT') || plugin.config.RSS_SERVER_PORT || '3001') as string);
-    this.apiToken = this.runtime.getSetting?.('RSS_API_TOKEN') || plugin.config.RSS_API_TOKEN;
+    this.port = parseInt(
+      (this.runtime.getSetting?.('RSS_SERVER_PORT') ||
+        plugin.config.RSS_SERVER_PORT ||
+        '3001') as string
+    );
+    this.apiToken =
+      this.runtime.getSetting?.('RSS_API_TOKEN') || plugin.config.RSS_API_TOKEN;
     this.setupMiddleware();
     this.setupRoutes();
   }
@@ -717,7 +822,10 @@ export class RSSServerService extends Service {
   private setupMiddleware(): void {
     this.app.use(cors());
     this.app.use(express.json());
-    const outDir = this.runtime.getSetting?.('RSS_OUTPUT_DIR') || plugin.config.RSS_OUTPUT_DIR || './rss-feeds';
+    const outDir =
+      this.runtime.getSetting?.('RSS_OUTPUT_DIR') ||
+      plugin.config.RSS_OUTPUT_DIR ||
+      './rss-feeds';
     this.app.use(express.static(outDir));
     this.app.use((req, res, next) => {
       if (!this.apiToken || req.path === '/health') return next();
@@ -731,96 +839,114 @@ export class RSSServerService extends Service {
     this.app.get('/rss', async (req, res) => {
       try {
         const rssPath = path.join(
-          this.runtime.getSetting?.('RSS_OUTPUT_DIR') || plugin.config.RSS_OUTPUT_DIR || './rss-feeds',
+          this.runtime.getSetting?.('RSS_OUTPUT_DIR') ||
+            plugin.config.RSS_OUTPUT_DIR ||
+            './rss-feeds',
           'twitter_lists.xml'
         );
-        
+
         const rssContent = await fs.readFile(rssPath, 'utf-8');
-        
+
         res.set({
           'Content-Type': 'application/rss+xml; charset=utf-8',
           'Cache-Control': 'public, max-age=1800',
         });
-        
+
         res.send(rssContent);
       } catch (error) {
-        res.status(404).json({ 
+        res.status(404).json({
           error: 'RSS feed not found',
-          message: 'Feed may not be generated yet. Try triggering an update first.'
+          message:
+            'Feed may not be generated yet. Try triggering an update first.',
         });
       }
     });
 
     this.app.post('/update', async (req, res) => {
       try {
-        const twitterService = this.runtime.getService(TwitterRSSService.serviceType) as TwitterRSSService;
-        
+        const twitterService = this.runtime.getService(
+          TwitterRSSService.serviceType
+        ) as TwitterRSSService;
+
         if (!twitterService) {
           throw new Error('Twitter RSS service not available');
         }
 
         const result = await twitterService.processAllLists();
-        
+
         res.json({
           success: true,
           message: 'RSS feed updated successfully',
           totalTweets: result.totalTweets,
           rssPath: result.rssPath,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       } catch (error) {
         res.status(500).json({
           success: false,
-          error: error.message
+          error: error.message,
         });
       }
     });
 
     this.app.get('/status', async (req, res) => {
       try {
-        const outputDir = this.runtime.getSetting?.('RSS_OUTPUT_DIR') || plugin.config.RSS_OUTPUT_DIR || './rss-feeds';
+        const outputDir =
+          this.runtime.getSetting?.('RSS_OUTPUT_DIR') ||
+          plugin.config.RSS_OUTPUT_DIR ||
+          './rss-feeds';
         const rssFile = path.join(outputDir, 'twitter_lists.xml');
-        
+
         let fileStats = null;
         try {
           const stats = await fs.stat(rssFile);
           fileStats = {
             exists: true,
             lastModified: stats.mtime.toISOString(),
-            size: stats.size
+            size: stats.size,
           };
         } catch {
           fileStats = { exists: false };
         }
 
-        const lists = (this.runtime.getSetting?.('TWITTER_LISTS') || plugin.config.TWITTER_LISTS || '').split(',').filter(Boolean);
-        
+        const lists = (
+          this.runtime.getSetting?.('TWITTER_LISTS') ||
+          plugin.config.TWITTER_LISTS ||
+          ''
+        )
+          .split(',')
+          .filter(Boolean);
+
         res.json({
           status: 'running',
           rssFile: fileStats,
           monitoring: {
             totalLists: lists.length,
-            lists: lists.map(id => id.trim()),
+            lists: lists.map((id) => id.trim()),
             updateInterval: `${this.runtime.getSetting?.('RSS_UPDATE_INTERVAL') || plugin.config.RSS_UPDATE_INTERVAL || '30'} minutes`,
-            maxTweetsPerList: parseInt((this.runtime.getSetting?.('MAX_TWEETS_PER_LIST') || plugin.config.MAX_TWEETS_PER_LIST || '50') as string)
+            maxTweetsPerList: parseInt(
+              (this.runtime.getSetting?.('MAX_TWEETS_PER_LIST') ||
+                plugin.config.MAX_TWEETS_PER_LIST ||
+                '50') as string
+            ),
           },
           server: {
             port: this.port,
-            uptime: process.uptime()
-          }
+            uptime: process.uptime(),
+          },
         });
       } catch (error) {
         res.status(500).json({
           status: 'error',
-          error: error.message
+          error: error.message,
         });
       }
     });
 
     this.app.get('/health', (req, res) => {
-      res.json({ 
+      res.json({
         status: 'healthy',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     });
   }
@@ -842,7 +968,9 @@ export class RSSServerService extends Service {
   async startServer(): Promise<void> {
     this.server = this.app.listen(this.port, () => {
       logger.info(`🚀 RSS Server running on http://localhost:${this.port}`);
-      logger.info(`📡 RSS Feed available at: http://localhost:${this.port}/rss`);
+      logger.info(
+        `📡 RSS Feed available at: http://localhost:${this.port}/rss`
+      );
       logger.info(`📊 Status endpoint: http://localhost:${this.port}/status`);
     });
   }
@@ -880,13 +1008,16 @@ const plugin: Plugin = {
     MAX_TWEETS_PER_LIST: process.env.MAX_TWEETS_PER_LIST || '50',
     RSS_API_TOKEN: process.env.RSS_API_TOKEN,
     RSS_FEED_TITLE: process.env.RSS_FEED_TITLE || 'Twitter Lists RSS Feed',
-    RSS_FEED_DESCRIPTION: process.env.RSS_FEED_DESCRIPTION || 'Aggregated tweets from monitored Twitter lists',
+    RSS_FEED_DESCRIPTION:
+      process.env.RSS_FEED_DESCRIPTION ||
+      'Aggregated tweets from monitored Twitter lists',
     RSS_OUTPUT_DIR: process.env.RSS_OUTPUT_DIR || './rss-feeds',
     RSS_SERVER_PORT: process.env.RSS_SERVER_PORT || '3001',
     FILTER_RETWEETS: process.env.FILTER_RETWEETS || 'false',
     FILTER_REPLIES: process.env.FILTER_REPLIES || 'false',
     MIN_TWEET_LENGTH: process.env.MIN_TWEET_LENGTH || '10',
     MAX_RSS_ENTRIES: process.env.MAX_RSS_ENTRIES || '500',
+    FETCH_TWEET_THREADS: process.env.FETCH_TWEET_THREADS || 'false',
   },
 
   async init(config: Record<string, string>) {
