@@ -5,7 +5,7 @@ import {
   type Project,
   type ProjectAgent,
 } from '@elizaos/core';
-import twitterRSSPlugin from './plugin';
+import twitterRSSPlugin, { setupGracefulShutdown } from './plugin';
 
 /**
  * TwitterRSSAgent - Specialized agent for monitoring Twitter lists and generating RSS feeds
@@ -163,7 +163,10 @@ const initCharacter = ({ runtime }: { runtime: IAgentRuntime }) => {
 
 export const projectAgent: ProjectAgent = {
   character,
-  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime }),
+  init: async (runtime: IAgentRuntime) => {
+    await initCharacter({ runtime });
+    setupGracefulShutdown(runtime);
+  },
   plugins: [twitterRSSPlugin],
 };
 
