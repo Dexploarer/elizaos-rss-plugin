@@ -78,6 +78,7 @@ npm start
 | `OPENAI_API_KEY` | ✅* | - | OpenAI API key |
 | `RSS_UPDATE_INTERVAL` | ❌ | 30 | Update interval (minutes) |
 | `MAX_TWEETS_PER_LIST` | ❌ | 50 | Max tweets per list |
+| `RSS_API_TOKEN` | ❌ | - | Bearer token required for HTTP API |
 | `RSS_SERVER_PORT` | ❌ | 3001 | HTTP server port |
 | `FILTER_RETWEETS` | ❌ | false | Filter out retweets |
 | `FILTER_REPLIES` | ❌ | false | Filter out replies |
@@ -98,6 +99,8 @@ npm start
 - `RSSServerService`: HTTP server for feed access
 
 ## 📡 HTTP API Endpoints
+
+All endpoints (except `/health`) require an `Authorization: Bearer` token if `RSS_API_TOKEN` is set.
 
 - `GET /rss` - Main RSS feed
 - `GET /status` - Monitoring dashboard with statistics
