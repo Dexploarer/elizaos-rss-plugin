@@ -10,3 +10,4 @@
 - [x] Document plugin actions, providers and HTTP endpoints in README
 - [x] Implement graceful shutdown to stop scheduler and server services
 - [x] Add changelog and release process documentation
+- [ ] Use versioned branches for `agent-twitter-client` as recommended (see Discord link)
